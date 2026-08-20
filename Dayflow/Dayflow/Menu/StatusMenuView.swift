@@ -6,7 +6,7 @@ struct StatusMenuView: View {
   let dismissMenu: () -> Void
   @ObservedObject private var appState = AppState.shared
   @ObservedObject private var pauseManager = PauseManager.shared
-  private let updaterManager = UpdaterManager.shared
+  @ObservedObject private var updaterManager = UpdaterManager.shared
 
   private var controlMode: RecordingControlMode {
     RecordingControl.currentMode(appState: appState, pauseManager: pauseManager)
@@ -25,7 +25,14 @@ struct StatusMenuView: View {
 
       MenuRow(title: "Open Dayflow", assetImage: "DayflowLogo", action: openDayflow)
       MenuRow(title: "Open Recordings", action: openRecordingsFolder)
-      MenuRow(title: "Check for Updates", action: checkForUpdates)
+      if updaterManager.updateAvailable {
+        MenuRow(
+          title: "Upstream v\(updaterManager.latestVersionString ?? "?") available",
+          action: openUpstreamRelease
+        )
+      } else {
+        MenuRow(title: "Check Upstream Version", action: checkForUpdates)
+      }
 
       MenuDivider()
 
@@ -74,6 +81,13 @@ struct StatusMenuView: View {
     performAfterMenuDismiss {
       updaterManager.checkForUpdates(showUI: true)
       NSApp.activate(ignoringOtherApps: true)
+    }
+  }
+
+  private func openUpstreamRelease() {
+    performAfterMenuDismiss {
+      guard let url = URL(string: "https://github.com/JerryZLiu/Dayflow/releases") else { return }
+      NSWorkspace.shared.open(url)
     }
   }
 

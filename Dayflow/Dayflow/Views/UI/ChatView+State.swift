@@ -4,7 +4,8 @@ import SwiftUI
 
 extension ChatView {
   var selectedProvider: DashboardChatProvider {
-    DashboardChatProvider.fromStoredValue(selectedProviderRaw)
+    if DayflowLocalPolicy.isEnabled { return .gemini }
+    return DashboardChatProvider.fromStoredValue(selectedProviderRaw)
   }
 
   var isUnlocked: Bool {

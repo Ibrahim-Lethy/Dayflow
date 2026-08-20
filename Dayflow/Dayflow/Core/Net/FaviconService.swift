@@ -211,6 +211,7 @@ final class FaviconService {
   }
 
   private func fetchHost(_ host: String) async -> NSImage? {
+    guard DayflowLocalPolicy.allowsRemoteFavicons else { return nil }
     let resolvedHost = resolvedHostAlias(for: host)
 
     // Pattern matching already done in fetchFavicon() — go straight to cache/network

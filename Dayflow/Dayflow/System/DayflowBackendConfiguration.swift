@@ -9,6 +9,7 @@ enum DayflowBackendConfiguration {
     bundle: Bundle = .main,
     defaults: UserDefaults = .standard
   ) -> String? {
+    guard DayflowLocalPolicy.allowsDayflowServices else { return nil }
     #if DEBUG
       if let override = normalized(defaults.string(forKey: debugOverrideDefaultsKey)) {
         return override
