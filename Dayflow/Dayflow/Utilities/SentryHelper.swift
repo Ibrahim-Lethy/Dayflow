@@ -31,6 +31,11 @@ final class SentryHelper {
 
   /// Enables or disables Sentry based on the shared telemetry preference.
   static func setEnabled(_ enabled: Bool) {
+    guard DayflowLocalPolicy.allowsTelemetry else {
+      isEnabled = false
+      SentrySDK.close()
+      return
+    }
     if enabled {
       startIfConfigured()
       return
@@ -43,6 +48,7 @@ final class SentryHelper {
 
   /// Starts Sentry using app bundle configuration when a DSN is available.
   static func startIfConfigured() {
+    guard DayflowLocalPolicy.allowsTelemetry else { return }
     guard !isEnabled else { return }
 
     let info = Bundle.main.infoDictionary

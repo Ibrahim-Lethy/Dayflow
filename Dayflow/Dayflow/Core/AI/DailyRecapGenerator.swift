@@ -137,13 +137,15 @@ final class DailyRecapGenerator {
   private init() {}
 
   func selectedProvider(from defaults: UserDefaults = .standard) -> DailyRecapProvider {
-    DailyRecapProvider.load(from: defaults)
+    if DayflowLocalPolicy.enforcesGeminiRouting(in: defaults) { return .gemini }
+    return DailyRecapProvider.load(from: defaults)
   }
 
   func persistSelectedProvider(
     _ provider: DailyRecapProvider, to defaults: UserDefaults = .standard
   ) {
-    provider.save(to: defaults)
+    (DayflowLocalPolicy.enforcesGeminiRouting(in: defaults) ? .gemini : provider).save(
+      to: defaults)
   }
 
   func availabilitySnapshot() -> [DailyRecapProvider: DailyRecapProviderAvailability] {

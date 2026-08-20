@@ -37,7 +37,9 @@ enum LLMProviderRoutingStore {
     defer { lock.unlock() }
 
     if defaults.object(forKey: storageKey) != nil {
-      return try decodeStoredRouting(from: defaults)
+      let stored = try decodeStoredRouting(from: defaults)
+      return DayflowLocalPolicy.enforcesGeminiRouting(in: defaults)
+        ? LLMProviderRouting(primary: .gemini) : stored
     }
 
     let migration = try migrateLegacyArtifacts(from: defaults)
@@ -114,11 +116,13 @@ enum LLMProviderRoutingStore {
       throw LLMProviderRoutingStoreError.unsupportedSchemaVersion(routing.schemaVersion)
     }
 
-    let normalized = LLMProviderRouting(
-      schemaVersion: routing.schemaVersion,
-      primary: routing.primary,
-      secondary: routing.secondary
-    )
+    let normalized = DayflowLocalPolicy.enforcesGeminiRouting(in: defaults)
+      ? LLMProviderRouting(primary: .gemini)
+      : LLMProviderRouting(
+        schemaVersion: routing.schemaVersion,
+        primary: routing.primary,
+        secondary: routing.secondary
+      )
 
     let encoded: Data
     do {

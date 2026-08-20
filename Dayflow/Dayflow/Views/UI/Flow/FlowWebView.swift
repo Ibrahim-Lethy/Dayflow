@@ -25,6 +25,9 @@ enum FlowWebConfiguration {
   static let urlOverrideDefaultsKey = "flowWebURLOverride"
 
   static var url: URL {
+    guard DayflowLocalPolicy.allowsRemoteFlow else {
+      return URL(string: "about:blank")!
+    }
     if let override = UserDefaults.standard.string(forKey: urlOverrideDefaultsKey),
       let url = URL(string: override)
     {

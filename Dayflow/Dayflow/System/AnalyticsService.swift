@@ -224,6 +224,7 @@ final class AnalyticsService {
 
   var isOptedIn: Bool {
     get {
+      guard DayflowLocalPolicy.allowsTelemetry else { return false }
       if UserDefaults.standard.object(forKey: optInKey) == nil {
         // Default ON per product decision
         return true
@@ -231,11 +232,15 @@ final class AnalyticsService {
       return UserDefaults.standard.bool(forKey: optInKey)
     }
     set {
-      UserDefaults.standard.set(newValue, forKey: optInKey)
+      UserDefaults.standard.set(
+        DayflowLocalPolicy.allowsTelemetry ? newValue : false,
+        forKey: optInKey
+      )
     }
   }
 
   func start(apiKey: String, host: String) {
+    guard DayflowLocalPolicy.allowsTelemetry else { return }
     let config = PostHogConfig(apiKey: apiKey, host: host)
     let optedIn = isOptedIn
     // Disable autocapture for privacy
@@ -350,6 +355,11 @@ final class AnalyticsService {
   }
 
   func setOptIn(_ enabled: Bool) {
+    guard DayflowLocalPolicy.allowsTelemetry else {
+      isOptedIn = false
+      SentryHelper.setEnabled(false)
+      return
+    }
     let previousValue = isOptedIn
     isOptedIn = enabled
 
@@ -398,7 +408,7 @@ final class AnalyticsService {
   }
 
   func capture(_ name: String, _ props: [String: Any] = [:]) {
-    guard isOptedIn else { return }
+    guard DayflowLocalPolicy.allowsTelemetry, isOptedIn else { return }
     let sanitized = sanitize(props)
     PostHogSDK.shared.capture(name, properties: sanitized)
   }

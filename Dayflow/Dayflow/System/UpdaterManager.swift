@@ -22,14 +22,6 @@ final class UpdaterManager: NSObject, ObservableObject {
       delegate: self)
   }()
 
-  // Fallback interactive updater for cases requiring authorization/UI
-  private lazy var interactiveController: SPUStandardUpdaterController = {
-    SPUStandardUpdaterController(
-      startingUpdater: false,
-      updaterDelegate: self,
-      userDriverDelegate: nil)
-  }()
-
   // Simple state for Settings UI
   @Published var isChecking = false
   @Published var statusText: String = ""
@@ -70,14 +62,7 @@ final class UpdaterManager: NSObject, ObservableObject {
       [
         "mode": showUI ? "manual" : "background"
       ])
-    if showUI {
-      // Start UI controller on demand so it can present prompts as needed
-      interactiveController.startUpdater()
-      interactiveController.checkForUpdates(nil)
-    } else {
-      // Trigger a background check immediately; the scheduler will also keep running
-      updater.checkForUpdatesInBackground()
-    }
+    updater.checkForUpdatesInBackground()
   }
 }
 
@@ -277,10 +262,6 @@ extension UpdaterManager: SPUUpdaterDelegate {
           "code": code,
           "needs_interaction": needsInteraction,
         ])
-      if needsInteraction {
-        // Trigger interactive updater; if a download already exists, Sparkle resumes and prompts
-        self.interactiveController.updater.checkForUpdates()
-      }
     }
   }
 

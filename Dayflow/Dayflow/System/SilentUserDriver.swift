@@ -6,18 +6,17 @@ final class SilentUserDriver: NSObject, SPUUserDriver {
   func show(
     _ request: SPUUpdatePermissionRequest, reply: @escaping (SUUpdatePermissionResponse) -> Void
   ) {
-    print("[Sparkle] Permission request; responding with automatic checks + downloads")
-    // Enable automatic checks & downloads by default; do not send system profile
+    print("[Sparkle] Permission request; enabling checks without downloads")
     let response = SUUpdatePermissionResponse(
       automaticUpdateChecks: true,
-      automaticUpdateDownloading: NSNumber(value: true),
+      automaticUpdateDownloading: NSNumber(value: false),
       sendSystemProfile: false
     )
     AnalyticsService.shared.capture(
       "sparkle_permission_requested",
       [
         "automatic_checks": true,
-        "automatic_downloads": true,
+        "automatic_downloads": false,
       ])
     reply(response)
   }
@@ -31,8 +30,7 @@ final class SilentUserDriver: NSObject, SPUUserDriver {
     reply: @escaping (SPUUserUpdateChoice) -> Void
   ) {
     print("[Sparkle] Update found: \(appcastItem.displayVersionString)")
-    // Always proceed to install
-    reply(.install)
+    reply(.dismiss)
   }
 
   func showUpdateReleaseNotes(with downloadData: SPUDownloadData) {
@@ -79,12 +77,7 @@ final class SilentUserDriver: NSObject, SPUUserDriver {
   }
 
   func showReady(toInstallAndRelaunch reply: @escaping (SPUUserUpdateChoice) -> Void) {
-    print("[Sparkle] Ready to install; allowing termination")
-    Task { @MainActor in
-      AppDelegate.allowTermination = true
-      AnalyticsService.shared.capture("sparkle_install_ready")
-      reply(.install)
-    }
+    reply(.dismiss)
   }
 
   func showInstallingUpdate(
