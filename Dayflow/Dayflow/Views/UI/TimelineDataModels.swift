@@ -25,6 +25,32 @@ struct TimelineActivity: Identifiable {
   let screenshot: NSImage?
   let appSites: AppSites?
   let isBackupGenerated: Bool?
+  let isUserModified: Bool
+
+  init(
+    id: String, recordId: Int64?, batchId: Int64?, startTime: Date, endTime: Date,
+    title: String, summary: String, detailedSummary: String, category: String,
+    subcategory: String, distractions: [Distraction]?, videoSummaryURL: String?,
+    screenshot: NSImage?, appSites: AppSites?, isBackupGenerated: Bool?,
+    isUserModified: Bool = false
+  ) {
+    self.id = id
+    self.recordId = recordId
+    self.batchId = batchId
+    self.startTime = startTime
+    self.endTime = endTime
+    self.title = title
+    self.summary = summary
+    self.detailedSummary = detailedSummary
+    self.category = category
+    self.subcategory = subcategory
+    self.distractions = distractions
+    self.videoSummaryURL = videoSummaryURL
+    self.screenshot = screenshot
+    self.appSites = appSites
+    self.isBackupGenerated = isBackupGenerated
+    self.isUserModified = isUserModified
+  }
 
   static func stableId(
     recordId: Int64?, batchId: Int64?, startTime: Date, endTime: Date, title: String,
@@ -64,7 +90,8 @@ struct TimelineActivity: Identifiable {
       videoSummaryURL: videoSummaryURL,
       screenshot: screenshot,
       appSites: appSites,
-      isBackupGenerated: isBackupGenerated
+      isBackupGenerated: isBackupGenerated,
+      isUserModified: isUserModified
     )
   }
 
@@ -84,7 +111,8 @@ struct TimelineActivity: Identifiable {
       videoSummaryURL: videoSummaryURL,
       screenshot: screenshot,
       appSites: appSites,
-      isBackupGenerated: isBackupGenerated
+      isBackupGenerated: isBackupGenerated,
+      isUserModified: isUserModified
     )
   }
 
@@ -104,7 +132,18 @@ struct TimelineActivity: Identifiable {
       videoSummaryURL: newVideoSummaryURL,
       screenshot: screenshot,
       appSites: appSites,
-      isBackupGenerated: isBackupGenerated
+      isBackupGenerated: isBackupGenerated,
+      isUserModified: isUserModified
+    )
+  }
+
+  func withUserEdit(title: String, category: String, start: Date, end: Date) -> TimelineActivity {
+    TimelineActivity(
+      id: id, recordId: recordId, batchId: batchId, startTime: start, endTime: end,
+      title: title, summary: summary, detailedSummary: detailedSummary, category: category,
+      subcategory: subcategory, distractions: distractions, videoSummaryURL: videoSummaryURL,
+      screenshot: screenshot, appSites: appSites, isBackupGenerated: isBackupGenerated,
+      isUserModified: true
     )
   }
 }

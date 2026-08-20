@@ -204,7 +204,8 @@ extension MainView {
             cardCompactVerticalPadding: TimelineCardLayout.compactVerticalPadding,
             cardNormalVerticalPadding: TimelineCardLayout.normalVerticalPadding,
             cardHoverScale: TimelineCardLayout.hoverScale,
-            cardPressedScale: TimelineCardLayout.pressedScale
+            cardPressedScale: TimelineCardLayout.pressedScale,
+            onDoubleClickEmptySlot: { presentNewTimelineEvent(near: $0) }
           )
           // Day is the zoomed-IN view (1/7 of a week). Entering Day feels
           // like diving into a single column: grow from 0.95 → 1 + fade in.
@@ -222,6 +223,7 @@ extension MainView {
             weekRange: timelineWeekRange,
             onSelectActivity: selectTimelineActivity,
             onClearSelection: { clearTimelineSelection() },
+            onDoubleClickEmptySlot: { presentNewTimelineEvent(near: $0) },
             weeklyHoursFrame: weeklyHoursFrame,
             weeklyHoursIntersectsCard: $weeklyHoursIntersectsCard,
             hideCardsForModeSwitch: hideWeekCardsDuringModeSwitch
@@ -399,6 +401,7 @@ extension MainView {
         TimelineRateSummaryView(
           activityID: activity.id,
           onRate: handleTimelineRating,
+          onEdit: { presentTimelineEventEditor(for: activity) },
           onDelete: handleTimelineDelete
         )
         .frame(maxWidth: .infinity)

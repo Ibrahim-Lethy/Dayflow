@@ -66,6 +66,7 @@ struct TimelineRateSummaryView: View {
   var isEnabled: Bool = true
   var activityID: String? = nil
   var onRate: ((TimelineRatingDirection) -> Void)? = nil
+  var onEdit: (() -> Void)? = nil
   var onDelete: (() -> Void)? = nil
 
   @State private var selectedDirection: TimelineRatingDirection? = nil
@@ -80,6 +81,14 @@ struct TimelineRateSummaryView: View {
     HStack(alignment: .center, spacing: 0) {
       if onDelete != nil {
         deleteButton
+      }
+
+      if let onEdit {
+        Button("Edit", action: onEdit)
+          .font(Font.custom("Figtree", size: 12).weight(.medium))
+          .buttonStyle(.plain)
+          .padding(.leading, 12)
+          .pointingHandCursor()
       }
 
       Spacer(minLength: 0)

@@ -221,11 +221,72 @@ extension StorageManager {
         sql: """
               UPDATE timeline_cards
               SET title = COALESCE(?, title),
-                  category = COALESCE(?, category)
+                  category = COALESCE(?, category),
+                  is_user_modified = 1
               WHERE id = ?
           """, arguments: [title, category, cardId])
     }
   }
+
+  func createUserTimelineCard(
+    title: String, category: String, start: Date, end: Date
+  ) throws -> Int64 {
+    let values = try TimelineEventRules.validated(
+      title: title, category: category, start: start, end: end)
+    let formatter = Self.timelineClockFormatter
+    let day = values.start.getDayInfoFor4AMBoundary().dayString
+
+    return try timedWrite("createUserTimelineCard") { db in
+      try db.execute(
+        sql: """
+              INSERT INTO timeline_cards(
+                batch_id, start, end, start_ts, end_ts, day, title,
+                summary, category, subcategory, detailed_summary, metadata,
+                is_user_modified
+              ) VALUES (NULL, ?, ?, ?, ?, ?, ?, '', ?, '', '', NULL, 1)
+          """,
+        arguments: [
+          formatter.string(from: values.start), formatter.string(from: values.end),
+          Int(values.start.timeIntervalSince1970), Int(values.end.timeIntervalSince1970),
+          day, values.title, values.category,
+        ]
+      )
+      return db.lastInsertedRowID
+    }
+  }
+
+  func updateUserTimelineCard(
+    id: Int64, title: String, category: String, start: Date, end: Date
+  ) throws {
+    let values = try TimelineEventRules.validated(
+      title: title, category: category, start: start, end: end)
+    let formatter = Self.timelineClockFormatter
+    let day = values.start.getDayInfoFor4AMBoundary().dayString
+
+    try timedWrite("updateUserTimelineCard") { db in
+      try db.execute(
+        sql: """
+              UPDATE timeline_cards
+              SET title = ?, category = ?, start = ?, end = ?,
+                  start_ts = ?, end_ts = ?, day = ?, is_user_modified = 1
+              WHERE id = ? AND is_deleted = 0
+          """,
+        arguments: [
+          values.title, values.category, formatter.string(from: values.start),
+          formatter.string(from: values.end), Int(values.start.timeIntervalSince1970),
+          Int(values.end.timeIntervalSince1970), day, id,
+        ]
+      )
+      guard db.changesCount == 1 else { throw TimelineEventError.cardNotFound }
+    }
+  }
+
+  private static let timelineClockFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.dateFormat = "h:mm a"
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    return formatter
+  }()
 
   // MARK: - Onboarding Card
 
@@ -379,7 +440,10 @@ extension StorageManager {
             videoSummaryURL: row["video_summary_url"],
             otherVideoSummaryURLs: nil,
             appSites: appSites,
-            isBackupGenerated: isBackupGenerated
+            isBackupGenerated: isBackupGenerated,
+            startTs: row["start_ts"],
+            endTs: row["end_ts"],
+            isUserModified: (row["is_user_modified"] as Int? ?? 0) != 0
           )
         }
       }) ?? []
@@ -456,10 +520,10 @@ extension StorageManager {
         db,
         sql: """
               SELECT * FROM timeline_cards
-              WHERE start_ts >= ? AND start_ts < ?
+              WHERE start_ts < ? AND end_ts > ?
                 AND is_deleted = 0
               ORDER BY start_ts ASC, start ASC
-          """, arguments: [startTs, endTs]
+          """, arguments: [endTs, startTs]
       )
       .map { row in
         // Decode metadata JSON (supports object or legacy array)
@@ -496,7 +560,10 @@ extension StorageManager {
           videoSummaryURL: row["video_summary_url"],
           otherVideoSummaryURLs: nil,
           appSites: appSites,
-          isBackupGenerated: isBackupGenerated
+          isBackupGenerated: isBackupGenerated,
+          startTs: row["start_ts"],
+          endTs: row["end_ts"],
+          isUserModified: (row["is_user_modified"] as Int? ?? 0) != 0
         )
       }
     }
@@ -559,7 +626,10 @@ extension StorageManager {
           videoSummaryURL: row["video_summary_url"],
           otherVideoSummaryURLs: nil,
           appSites: appSites,
-          isBackupGenerated: isBackupGenerated
+          isBackupGenerated: isBackupGenerated,
+          startTs: row["start_ts"],
+          endTs: row["end_ts"],
+          isUserModified: (row["is_user_modified"] as Int? ?? 0) != 0
         )
       }
     }
@@ -876,6 +946,7 @@ extension StorageManager {
                  OR (start_ts >= ? AND start_ts < ?))
                  AND video_summary_url IS NOT NULL
                  AND is_deleted = 0
+                 AND is_user_modified = 0
                  AND (category != 'System' OR batch_id = ?)
           """, arguments: [toTs, fromTs, fromTs, toTs, batchId])
 
@@ -889,6 +960,7 @@ extension StorageManager {
               WHERE ((start_ts < ? AND end_ts > ?)
                  OR (start_ts >= ? AND start_ts < ?))
                  AND is_deleted = 0
+                 AND is_user_modified = 0
                  AND (category != 'System' OR batch_id = ?)
           """, arguments: [toTs, fromTs, fromTs, toTs, batchId])
 
@@ -905,6 +977,7 @@ extension StorageManager {
               WHERE ((start_ts < ? AND end_ts > ?)
                  OR (start_ts >= ? AND start_ts < ?))
                  AND is_deleted = 0
+                 AND is_user_modified = 0
                  AND (category != 'System' OR batch_id = ?)
           """, arguments: [toTs, fromTs, fromTs, toTs, batchId])
 

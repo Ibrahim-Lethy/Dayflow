@@ -3,6 +3,67 @@ import Foundation
 import SwiftUI
 
 extension MainView {
+  func presentNewTimelineEvent(near preferredStart: Date? = nil) {
+    let anchor = preferredStart ?? selectedDate
+    let range = TimelineEventRules.snappedThirtyMinuteRange(
+      on: anchor, near: preferredStart)
+    guard range.end <= Date() else { return }
+    timelineEventEditor = TimelineEventEditorState(
+      recordId: nil,
+      activity: nil,
+      title: "",
+      category: defaultManualEventCategory,
+      start: range.start,
+      end: range.end
+    )
+  }
+
+  func presentTimelineEventEditor(for activity: TimelineActivity) {
+    timelineEventEditor = TimelineEventEditorState(
+      recordId: activity.recordId,
+      activity: activity,
+      title: activity.title,
+      category: activity.category,
+      start: activity.startTime,
+      end: activity.endTime
+    )
+  }
+
+  private var defaultManualEventCategory: String {
+    categoryStore.categories.first {
+      !$0.isIdle && $0.name.caseInsensitiveCompare("Personal") == .orderedSame
+    }?.name ?? categoryStore.categories.first(where: { !$0.isIdle })?.name ?? "Personal"
+  }
+
+  func saveTimelineEvent(
+    state: TimelineEventEditorState,
+    title: String,
+    category: String,
+    start: Date,
+    end: Date
+  ) async throws {
+    let recordId = state.recordId
+    _ = try await Task.detached(priority: .userInitiated) {
+      if let recordId {
+        try StorageManager.shared.updateUserTimelineCard(
+          id: recordId, title: title, category: category, start: start, end: end)
+        return recordId
+      }
+      return try StorageManager.shared.createUserTimelineCard(
+        title: title, category: category, start: start, end: end)
+    }.value
+
+    if let activity = state.activity {
+      selectedActivity = activity.withUserEdit(
+        title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+        category: category,
+        start: start,
+        end: end
+      )
+    }
+    refreshActivitiesTrigger &+= 1
+  }
+
   func handleCategoryChange(to category: TimelineCategory, for activity: TimelineActivity) {
     let newName = category.name.trimmingCharacters(in: .whitespacesAndNewlines)
 

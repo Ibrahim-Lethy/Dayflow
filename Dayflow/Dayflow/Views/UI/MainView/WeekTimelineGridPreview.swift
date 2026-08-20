@@ -160,7 +160,9 @@ private struct WeekTimelineHoverPrototypeHarness: View {
         faviconPrimaryHost: spec.favicon,
         faviconSecondaryHost: nil,
         failureCount: spec.title == "Processing failed" ? 1 : 0,
-        batchIds: []
+        batchIds: [],
+        overlapColumn: 0,
+        overlapColumnCount: 1
       )
     }
   }

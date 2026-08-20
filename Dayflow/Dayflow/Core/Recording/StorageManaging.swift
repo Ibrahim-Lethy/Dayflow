@@ -28,6 +28,10 @@ protocol StorageManaging: Sendable {
   func saveTimelineCardShell(batchId: Int64, card: TimelineCardShell) -> Int64?
   func updateTimelineCardVideoURL(cardId: Int64, videoSummaryURL: String)
   func deleteTimelineCard(recordId: Int64) -> String?
+  func createUserTimelineCard(title: String, category: String, start: Date, end: Date) throws
+    -> Int64
+  func updateUserTimelineCard(id: Int64, title: String, category: String, start: Date, end: Date)
+    throws
   func fetchTimelineCards(forBatch batchId: Int64) -> [TimelineCard]
   func fetchTimelineCard(byId id: Int64) -> TimelineCardWithTimestamps?
   func fetchLastTimelineCard(endingBefore: Date) -> TimelineCardWithTimestamps?
