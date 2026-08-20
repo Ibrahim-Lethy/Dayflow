@@ -225,7 +225,20 @@ extension MainView {
   }
 
   private var timelineTrailingControls: some View {
-    PausePillView()
+    HStack(spacing: 8) {
+      Button {
+        presentNewTimelineEvent()
+      } label: {
+        Label("Add", systemImage: "plus")
+          .font(.custom("Figtree", size: 12).weight(.medium))
+          .padding(.horizontal, 10)
+          .frame(height: 30)
+          .background(Color.white.opacity(0.82), in: Capsule())
+      }
+      .buttonStyle(.plain)
+      .pointingHandCursor()
+      PausePillView()
+    }
   }
 
   private var timelineHeaderTrailingReservation: CGFloat {

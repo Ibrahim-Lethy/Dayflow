@@ -44,6 +44,8 @@ struct WeekPositionedActivity: Identifiable {
   let faviconSecondaryHost: String?
   let failureCount: Int
   let batchIds: [Int64]
+  let overlapColumn: Int
+  let overlapColumnCount: Int
 }
 
 // Published by the week view's cards layer; consumed locally to drive the
@@ -67,6 +69,7 @@ struct WeekTimelineGridView: View {
   let weekRange: TimelineWeekRange
   let onSelectActivity: (TimelineActivity) -> Void
   let onClearSelection: () -> Void
+  var onDoubleClickEmptySlot: (Date) -> Void = { _ in }
 
   // Frame of the "X hours tracked" footer label in the TimelinePane coord
   // space; the grid compares against this to hide the label when it'd sit
@@ -383,11 +386,29 @@ struct WeekTimelineGridView: View {
   }
 
   private func cardsLayer(dayWidth: CGFloat) -> some View {
-    let cardWidth = weekCardWidth(for: dayWidth)
-
     return ZStack(alignment: .topLeading) {
+      Color.clear
+        .contentShape(Rectangle())
+        .gesture(
+          SpatialTapGesture(count: 2).onEnded { value in
+            let dayIndex = max(0, min(6, Int(value.location.x / max(1, dayWidth))))
+            guard weekRange.days.indices.contains(dayIndex) else { return }
+            let start = weekRange.days[dayIndex].date.getDayInfoFor4AMBoundary().startOfDay
+            let minutes = max(0, min(24 * 60 - 1,
+              Int(value.location.y / WeekTimelineConfig.pixelsPerMinute)))
+            let clicked = start.addingTimeInterval(TimeInterval(minutes * 60))
+            if clicked < Date() { onDoubleClickEmptySlot(clicked) }
+          }
+        )
       ForEach(positionedActivities) { item in
-        let cardXPosition = weekCardXPosition(for: item.columnIndex, dayWidth: dayWidth)
+        let fullWidth = weekCardWidth(for: dayWidth)
+        let gap: CGFloat = 2
+        let cardWidth = max(0,
+          (fullWidth - CGFloat(item.overlapColumnCount - 1) * gap)
+            / CGFloat(item.overlapColumnCount))
+        let cardXPosition = CGFloat(item.columnIndex) * dayWidth
+          + WeekTimelineConfig.cardLeadingGap
+          + CGFloat(item.overlapColumn) * (cardWidth + gap) + cardWidth / 2
         let isHov = hoveredCardID == item.id
         let cardEffectiveHeight = effectiveHeight(for: item)
 
@@ -399,7 +420,7 @@ struct WeekTimelineGridView: View {
           effectiveHeight: cardEffectiveHeight,
           durationMinutes: item.durationMinutes,
           palette: palette(for: item.categoryName),
-          isSelected: selectedActivity?.id == item.id,
+          isSelected: selectedActivity?.id == item.activity.id,
           isHovered: isHov,
           showTimelineAppIcons: showTimelineAppIcons,
           faviconPrimaryRaw: item.faviconPrimaryRaw,
@@ -413,7 +434,7 @@ struct WeekTimelineGridView: View {
             scheduleHoverChange(cardID: item.id, hovering: hovering)
           }
         ) {
-          if selectedActivity?.id == item.id {
+          if selectedActivity?.id == item.activity.id {
             onClearSelection()
           } else {
             onSelectActivity(item.activity)
@@ -541,12 +562,17 @@ struct WeekTimelineGridView: View {
       positioned.reserveCapacity(activities.count)
 
       for day in weekDays {
+        let dayInfo = day.date.getDayInfoFor4AMBoundary()
         let dayActivities = activities.filter {
-          $0.startTime.getDayInfoFor4AMBoundary().dayString == day.dayString
+          $0.endTime > dayInfo.startOfDay && $0.startTime < dayInfo.endOfDay
         }
-        let segments = TimelineActivityLoader.resolveDisplaySegments(from: dayActivities)
+        let segments = TimelineActivityLoader.resolveDisplaySegments(
+          from: dayActivities,
+          clippedTo: DateInterval(start: dayInfo.startOfDay, end: dayInfo.endOfDay)
+        )
 
-        for segment in segments {
+        for columned in TimelineActivityLoader.assignOverlapColumns(segments) {
+          let segment = columned.segment
           let durationMinutes = max(0, segment.end.timeIntervalSince(segment.start) / 60)
           let rawHeight = CGFloat(durationMinutes) * WeekTimelineConfig.pixelsPerMinute
           let height = max(WeekTimelineConfig.minimumCardHeight, rawHeight - 2)
@@ -555,7 +581,7 @@ struct WeekTimelineGridView: View {
 
           positioned.append(
             WeekPositionedActivity(
-              id: segment.activity.id,
+              id: "\(segment.activity.id)-\(day.dayString)",
               activity: segment.activity,
               columnIndex: dayLookup[day.dayString] ?? 0,
               yPosition: calculateYPosition(for: segment.start) + 1,
@@ -569,7 +595,9 @@ struct WeekTimelineGridView: View {
               faviconPrimaryHost: FaviconService.normalizedHost(from: primaryRaw),
               faviconSecondaryHost: FaviconService.normalizedHost(from: secondaryRaw),
               failureCount: segment.failureCount,
-              batchIds: segment.batchIds
+              batchIds: segment.batchIds,
+              overlapColumn: columned.column,
+              overlapColumnCount: columned.columnCount
             )
           )
         }
@@ -578,12 +606,13 @@ struct WeekTimelineGridView: View {
 
       let projectionStart = CFAbsoluteTimeGetCurrent()
       let currentTimelineDay = timelineDisplayDate(from: Date())
-      let currentDayString = DateFormatter.yyyyMMdd.string(from: currentTimelineDay)
+      let currentDayInfo = currentTimelineDay.getDayInfoFor4AMBoundary()
       let currentDayActivities = activities.filter {
-        $0.startTime.getDayInfoFor4AMBoundary().dayString == currentDayString
+        $0.endTime > currentDayInfo.startOfDay && $0.startTime < currentDayInfo.endOfDay
       }
       let currentDaySegments = TimelineActivityLoader.resolveDisplaySegments(
-        from: currentDayActivities)
+        from: currentDayActivities,
+        clippedTo: DateInterval(start: currentDayInfo.startOfDay, end: currentDayInfo.endOfDay))
       let currentDayVisualBlockers = Self.visualBlockingSegments(from: currentDaySegments)
       let projection =
         requestedWeekRange.contains(Date())

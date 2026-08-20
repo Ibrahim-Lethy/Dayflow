@@ -46,6 +46,8 @@ private struct CanvasPositionedActivity: Identifiable {
   let faviconSecondaryHost: String?
   let failureCount: Int
   let batchIds: [Int64]
+  let overlapColumn: Int
+  let overlapColumnCount: Int
 }
 
 struct CanvasTimelineDataView: View {
@@ -70,6 +72,7 @@ struct CanvasTimelineDataView: View {
   let cardNormalVerticalPadding: CGFloat
   let cardHoverScale: CGFloat
   let cardPressedScale: CGFloat
+  var onDoubleClickEmptySlot: (Date) -> Void = { _ in }
 
   @State private var selectedCardId: String? = nil
   @State private var positionedActivities: [CanvasPositionedActivity] = []
@@ -318,6 +321,15 @@ struct CanvasTimelineDataView: View {
           .onTapGesture {
             clearSelection()
           }
+          .gesture(
+            SpatialTapGesture(count: 2).onEnded { value in
+              let dayStart = selectedDate.getDayInfoFor4AMBoundary().startOfDay
+              let minutes = max(0, min(24 * 60 - 1,
+                Int(value.location.y / pixelsPerMinute)))
+              let clicked = dayStart.addingTimeInterval(TimeInterval(minutes * 60))
+              if clicked < Date() { onDoubleClickEmptySlot(clicked) }
+            }
+          )
           .pointingHandCursor(enabled: selectedCardId != nil || selectedActivity != nil)
         ForEach(Array(positionedActivities.enumerated()), id: \.element.id) { index, item in
           let isVisible = cardEntranceProgress[item.id] ?? false
@@ -357,8 +369,19 @@ struct CanvasTimelineDataView: View {
             hoverScale: cardHoverScale,
             pressedScale: cardPressedScale
           )
-          .frame(width: geo.size.width, height: item.height)
-          .position(x: geo.size.width / 2, y: item.yPosition + (item.height / 2))
+          .frame(
+            width: max(0, (geo.size.width - CGFloat(item.overlapColumnCount - 1) * 3)
+              / CGFloat(item.overlapColumnCount)),
+            height: item.height
+          )
+          .position(
+            x: CGFloat(item.overlapColumn) *
+              ((geo.size.width - CGFloat(item.overlapColumnCount - 1) * 3)
+                / CGFloat(item.overlapColumnCount) + 3)
+              + ((geo.size.width - CGFloat(item.overlapColumnCount - 1) * 3)
+                / CGFloat(item.overlapColumnCount)) / 2,
+            y: item.yPosition + (item.height / 2)
+          )
           // Staggered entrance animation (Emil Kowalski: sequential reveal creates polish)
           .opacity(isVisible ? 1 : 0)
           .offset(x: isVisible ? 0 : 12)
@@ -641,17 +664,22 @@ struct CanvasTimelineDataView: View {
       // Check for cancellation before expensive processing
       guard !Task.isCancelled else { return }
 
-      // Mitigation transform: resolve visual overlaps by trimming larger cards
-      // so that smaller cards "win". This is a display-only fix to handle
-      // upstream card-generation overlap bugs without touching stored data.
-      let segments = TimelineActivityLoader.resolveDisplaySegments(from: payload.activities)
+      // Keep true durations, clip at the 4 AM day boundary, then place
+      // overlapping cards in stable side-by-side columns.
+      let dayInfo = payload.timelineDate.getDayInfoFor4AMBoundary()
+      let segments = TimelineActivityLoader.resolveDisplaySegments(
+        from: payload.activities,
+        clippedTo: DateInterval(start: dayInfo.startOfDay, end: dayInfo.endOfDay)
+      )
       let recordingProjection = TimelineActivityLoader.recordingProjectionWindow(
         for: payload.timelineDate,
         displaySegments: segments,
         now: Date()
       )
 
-      let positioned = segments.map { seg -> CanvasPositionedActivity in
+      let positioned = TimelineActivityLoader.assignOverlapColumns(segments).map {
+        columned -> CanvasPositionedActivity in
+        let seg = columned.segment
         let y = self.calculateYPosition(for: seg.start)
         // Card spacing: -2 total (1px top + 1px bottom)
         let durationMinutes = max(0, seg.end.timeIntervalSince(seg.start) / 60)
@@ -677,7 +705,9 @@ struct CanvasTimelineDataView: View {
           faviconPrimaryHost: primaryHost,
           faviconSecondaryHost: secondaryHost,
           failureCount: seg.failureCount,
-          batchIds: seg.batchIds
+          batchIds: seg.batchIds,
+          overlapColumn: columned.column,
+          overlapColumnCount: columned.columnCount
         )
       }
 

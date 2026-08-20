@@ -8,7 +8,17 @@ import GRDB
 import Sentry
 
 final class StorageManager: StorageManaging, @unchecked Sendable {
-  static let shared = StorageManager()
+  static let shared: StorageManager = {
+    let environment = ProcessInfo.processInfo.environment
+    if environment["XCTestConfigurationFilePath"] != nil
+      || environment["XCTestBundlePath"] != nil
+    {
+      let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
+        "DayflowTests-\(ProcessInfo.processInfo.processIdentifier)", isDirectory: true)
+      return StorageManager(baseDirectory: directory, startSchedulers: false)
+    }
+    return StorageManager()
+  }()
 
   enum DatabaseOperationKind: String {
     case read
@@ -197,12 +207,15 @@ final class StorageManager: StorageManaging, @unchecked Sendable {
   var checkpointTimer: DispatchSourceTimer?
   var backupTimer: DispatchSourceTimer?
 
-  init() {
-    UserDefaultsMigrator.migrateIfNeeded()
-    StoragePathMigrator.migrateIfNeeded()
+  init(baseDirectory: URL? = nil, startSchedulers: Bool = true) {
+    if baseDirectory == nil {
+      UserDefaultsMigrator.migrateIfNeeded()
+      StoragePathMigrator.migrateIfNeeded()
+    }
 
     let appSupport = fileMgr.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-    let baseDir = appSupport.appendingPathComponent("Dayflow", isDirectory: true)
+    let baseDir = baseDirectory
+      ?? appSupport.appendingPathComponent("Dayflow", isDirectory: true)
     let recordingsDir = baseDir.appendingPathComponent("recordings", isDirectory: true)
     let backupDir = baseDir.appendingPathComponent("backups", isDirectory: true)
 
@@ -259,15 +272,13 @@ final class StorageManager: StorageManaging, @unchecked Sendable {
     truncateOversizedLLMCallBodiesIfNeeded()
 
     // Run initial purge, then schedule hourly
-    purgeIfNeeded()
-    TimelapseStorageManager.shared.purgeIfNeeded()
-    startPurgeScheduler()
-
-    // Schedule WAL checkpoints every 5 minutes to prevent data loss
-    startCheckpointScheduler()
-
-    // Schedule daily backups
-    startBackupScheduler()
+    if startSchedulers {
+      purgeIfNeeded()
+      TimelapseStorageManager.shared.purgeIfNeeded()
+      startPurgeScheduler()
+      startCheckpointScheduler()
+      startBackupScheduler()
+    }
   }
 
   // TEMPORARY DEBUG: Timing helpers for database operations
@@ -510,6 +521,7 @@ final class StorageManager: StorageManaging, @unchecked Sendable {
                   detailed_summary TEXT,
                   metadata TEXT,             -- For distractions JSON
                   video_summary_url TEXT,    -- Link to video summary on filesystem
+                  is_user_modified INTEGER NOT NULL DEFAULT 0,
                   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
               );
               CREATE INDEX IF NOT EXISTS idx_timeline_cards_day ON timeline_cards(day);
@@ -698,6 +710,15 @@ final class StorageManager: StorageManaging, @unchecked Sendable {
             """)
 
         print("✅ Added is_deleted column and composite indexes to timeline_cards")
+      }
+
+      if !timelineCardsColumns.contains("is_user_modified") {
+        try db.execute(
+          sql: """
+                ALTER TABLE timeline_cards
+                ADD COLUMN is_user_modified INTEGER NOT NULL DEFAULT 0;
+            """)
+        print("✅ Added is_user_modified column to timeline_cards")
       }
 
       let screenshotColumns = try db.columns(in: "screenshots").map { $0.name }

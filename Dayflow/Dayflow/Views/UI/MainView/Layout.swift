@@ -48,6 +48,13 @@ extension MainView {
           isPresented: $showDatePicker
         )
       }
+      .sheet(item: $timelineEventEditor) { state in
+        TimelineEventEditor(state: state, categories: categoryStore.categories) {
+          title, category, start, end in
+          try await saveTimelineEvent(
+            state: state, title: title, category: category, start: start, end: end)
+        }
+      }
       .onAppear(perform: performMainLayoutOnAppear)
       .onDisappear(perform: performMainLayoutOnDisappear)
       .onChange(of: inactivity.pendingReset) { _, fired in

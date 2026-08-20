@@ -39,6 +39,7 @@ extension StorageManager {
               WHERE start_ts >= ? AND start_ts < ?
                 AND video_summary_url IS NOT NULL
                 AND is_deleted = 0
+                AND is_user_modified = 0
           """, arguments: [startTs, endTs])
 
       videoPaths = rows.compactMap { $0["video_summary_url"] as? String }
@@ -50,6 +51,7 @@ extension StorageManager {
               SET is_deleted = 1
               WHERE start_ts >= ? AND start_ts < ?
                 AND is_deleted = 0
+                AND is_user_modified = 0
           """, arguments: [startTs, endTs])
     }
 
@@ -72,6 +74,7 @@ extension StorageManager {
                 WHERE batch_id IN (\(placeholders))
                   AND video_summary_url IS NOT NULL
                   AND is_deleted = 0
+                  AND is_user_modified = 0
             """,
           arguments: StatementArguments(batchIds)
         )
@@ -85,6 +88,7 @@ extension StorageManager {
                 SET is_deleted = 1
                 WHERE batch_id IN (\(placeholders))
                   AND is_deleted = 0
+                  AND is_user_modified = 0
             """,
           arguments: StatementArguments(batchIds)
         )

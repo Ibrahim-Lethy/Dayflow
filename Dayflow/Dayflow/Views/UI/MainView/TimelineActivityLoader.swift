@@ -23,16 +23,22 @@ struct TimelineDisplaySegment {
     return activities.compactMap(\.batchId).filter { seen.insert($0).inserted }
   }
 
-  mutating func appendFailure(_ activity: TimelineActivity) {
+  mutating func appendFailure(_ activity: TimelineActivity, start: Date, end: Date) {
     activities.append(activity)
-    start = min(start, activity.startTime)
-    end = max(end, activity.endTime)
+    self.start = min(self.start, start)
+    self.end = max(self.end, end)
   }
 }
 
 struct TimelineRecordingProjectionWindow {
   let start: Date
   let end: Date
+}
+
+struct TimelineColumnedSegment {
+  let segment: TimelineDisplaySegment
+  let column: Int
+  let columnCount: Int
 }
 
 enum TimelineActivityLoader {
@@ -100,49 +106,59 @@ enum TimelineActivityLoader {
     results.reserveCapacity(cards.count)
 
     for card in cards {
-      guard
-        let baseDay = DateFormatter.yyyyMMdd.date(from: card.day),
-        let parsedStart = timeFormatter.date(from: card.startTimestamp),
-        let parsedEnd = timeFormatter.date(from: card.endTimestamp)
-      else {
-        continue
-      }
+      let timestampStart = card.startTs.map { Date(timeIntervalSince1970: TimeInterval($0)) }
+      let timestampEnd = card.endTs.map { Date(timeIntervalSince1970: TimeInterval($0)) }
 
-      let baseDate = calendar.startOfDay(for: baseDay)
-      let startComponents = calendar.dateComponents([.hour, .minute], from: parsedStart)
-      let endComponents = calendar.dateComponents([.hour, .minute], from: parsedEnd)
+      let adjustedStartDate: Date
+      let adjustedEndDate: Date
 
-      guard
-        let startDate = calendar.date(
-          bySettingHour: startComponents.hour ?? 0,
-          minute: startComponents.minute ?? 0,
-          second: 0,
-          of: baseDate
-        ),
-        let endDate = calendar.date(
-          bySettingHour: endComponents.hour ?? 0,
-          minute: endComponents.minute ?? 0,
-          second: 0,
-          of: baseDate
-        )
-      else {
-        continue
-      }
+      if let timestampStart, let timestampEnd, timestampEnd > timestampStart {
+        adjustedStartDate = timestampStart
+        adjustedEndDate = timestampEnd
+      } else {
+        guard
+          let baseDay = DateFormatter.yyyyMMdd.date(from: card.day),
+          let parsedStart = timeFormatter.date(from: card.startTimestamp),
+          let parsedEnd = timeFormatter.date(from: card.endTimestamp)
+        else { continue }
 
-      var adjustedStartDate = startDate
-      var adjustedEndDate = endDate
+        let baseDate = calendar.startOfDay(for: baseDay)
+        let startComponents = calendar.dateComponents([.hour, .minute], from: parsedStart)
+        let endComponents = calendar.dateComponents([.hour, .minute], from: parsedEnd)
 
-      if calendar.component(.hour, from: startDate) < 4 {
-        adjustedStartDate = calendar.date(byAdding: .day, value: 1, to: startDate) ?? startDate
-      }
+        guard
+          let startDate = calendar.date(
+            bySettingHour: startComponents.hour ?? 0,
+            minute: startComponents.minute ?? 0,
+            second: 0,
+            of: baseDate
+          ),
+          let endDate = calendar.date(
+            bySettingHour: endComponents.hour ?? 0,
+            minute: endComponents.minute ?? 0,
+            second: 0,
+            of: baseDate
+          )
+        else {
+          continue
+        }
 
-      if calendar.component(.hour, from: endDate) < 4 {
-        adjustedEndDate = calendar.date(byAdding: .day, value: 1, to: endDate) ?? endDate
-      }
+        var resolvedStart = startDate
+        var resolvedEnd = endDate
 
-      if adjustedEndDate < adjustedStartDate {
-        adjustedEndDate =
-          calendar.date(byAdding: .day, value: 1, to: adjustedEndDate) ?? adjustedEndDate
+        if calendar.component(.hour, from: startDate) < 4 {
+          resolvedStart = calendar.date(byAdding: .day, value: 1, to: startDate) ?? startDate
+        }
+
+        if calendar.component(.hour, from: endDate) < 4 {
+          resolvedEnd = calendar.date(byAdding: .day, value: 1, to: endDate) ?? endDate
+        }
+
+        if resolvedEnd < resolvedStart {
+          resolvedEnd = calendar.date(byAdding: .day, value: 1, to: resolvedEnd) ?? resolvedEnd
+        }
+        adjustedStartDate = resolvedStart
+        adjustedEndDate = resolvedEnd
       }
 
       let baseId = TimelineActivity.stableId(
@@ -175,7 +191,8 @@ enum TimelineActivityLoader {
           videoSummaryURL: card.videoSummaryURL,
           screenshot: nil,
           appSites: card.appSites,
-          isBackupGenerated: card.isBackupGenerated
+          isBackupGenerated: card.isBackupGenerated,
+          isUserModified: card.isUserModified
         )
       )
     }
@@ -183,7 +200,9 @@ enum TimelineActivityLoader {
     return results
   }
 
-  static func resolveDisplaySegments(from activities: [TimelineActivity])
+  static func resolveDisplaySegments(
+    from activities: [TimelineActivity], clippedTo interval: DateInterval? = nil
+  )
     -> [TimelineDisplaySegment]
   {
     let sortedActivities = activities.sorted { lhs, rhs in
@@ -197,90 +216,69 @@ enum TimelineActivityLoader {
     segments.reserveCapacity(sortedActivities.count)
 
     for activity in sortedActivities {
+      let clippedStart = max(activity.startTime, interval?.start ?? activity.startTime)
+      let clippedEnd = min(activity.endTime, interval?.end ?? activity.endTime)
+      guard clippedEnd > clippedStart else { continue }
       if activity.title == failedTitle,
         let lastIndex = segments.indices.last,
         segments[lastIndex].activity.title == failedTitle,
-        activity.startTime.timeIntervalSince(segments[lastIndex].end)
+        clippedStart.timeIntervalSince(segments[lastIndex].end)
           <= failureGroupingGapTolerance
       {
-        segments[lastIndex].appendFailure(activity)
+        segments[lastIndex].appendFailure(activity, start: clippedStart, end: clippedEnd)
       } else {
         segments.append(
           TimelineDisplaySegment(
             activity: activity,
-            start: activity.startTime,
-            end: activity.endTime
+            start: clippedStart,
+            end: clippedEnd
           ))
       }
     }
 
-    guard segments.count > 1 else { return segments }
+    return segments
+  }
 
-    var changed = true
-    var passes = 0
-    let maxPasses = 8
+  static func assignOverlapColumns(_ segments: [TimelineDisplaySegment])
+    -> [TimelineColumnedSegment]
+  {
+    let sorted = segments.sorted {
+      if $0.start != $1.start { return $0.start < $1.start }
+      if $0.end != $1.end { return $0.end < $1.end }
+      return $0.activity.id < $1.activity.id
+    }
+    var result: [TimelineColumnedSegment] = []
+    var cluster: [TimelineDisplaySegment] = []
+    var clusterEnd = Date.distantPast
 
-    while changed && passes < maxPasses {
-      changed = false
-      passes += 1
-
-      var i = 0
-      while i < segments.count {
-        var j = i + 1
-        while j < segments.count {
-          if segments[j].start >= segments[i].end { break }
-
-          let first = segments[i]
-          let second = segments[j]
-          let overlapStart = max(first.start, second.start)
-          let overlapEnd = min(first.end, second.end)
-
-          if overlapEnd > overlapStart {
-            let firstDuration = first.end.timeIntervalSince(first.start)
-            let secondDuration = second.end.timeIntervalSince(second.start)
-            let smallIndex = firstDuration <= secondDuration ? i : j
-            let largeIndex = firstDuration <= secondDuration ? j : i
-
-            let smaller = segments[smallIndex]
-            var larger = segments[largeIndex]
-
-            if larger.start < smaller.start && smaller.end < larger.end {
-              let leftDuration = smaller.start.timeIntervalSince(larger.start)
-              let rightDuration = larger.end.timeIntervalSince(smaller.end)
-              if rightDuration >= leftDuration {
-                larger.start = smaller.end
-              } else {
-                larger.end = smaller.start
-              }
-            } else if smaller.start <= larger.start && larger.start < smaller.end {
-              larger.start = smaller.end
-            } else if smaller.start < larger.end && larger.end <= smaller.end {
-              larger.end = smaller.start
-            }
-
-            if larger.end <= larger.start {
-              segments.remove(at: largeIndex)
-              changed = true
-              j = i + 1
-              continue
-            } else if larger.start != segments[largeIndex].start
-              || larger.end != segments[largeIndex].end
-            {
-              segments[largeIndex] = larger
-              segments.sort { $0.start < $1.start }
-              changed = true
-              j = i + 1
-              continue
-            }
-          }
-
-          j += 1
+    func appendCluster(_ items: [TimelineDisplaySegment]) {
+      guard !items.isEmpty else { return }
+      var columnEnds: [Date] = []
+      var assignments: [(TimelineDisplaySegment, Int)] = []
+      for item in items {
+        let column = columnEnds.firstIndex(where: { $0 <= item.start }) ?? columnEnds.count
+        if column == columnEnds.count { columnEnds.append(item.end) } else {
+          columnEnds[column] = item.end
         }
-        i += 1
+        assignments.append((item, column))
       }
+      let count = max(1, columnEnds.count)
+      result.append(contentsOf: assignments.map {
+        TimelineColumnedSegment(segment: $0.0, column: $0.1, columnCount: count)
+      })
     }
 
-    return segments
+    for item in sorted {
+      if !cluster.isEmpty, item.start >= clusterEnd {
+        appendCluster(cluster)
+        cluster.removeAll(keepingCapacity: true)
+        clusterEnd = .distantPast
+      }
+      cluster.append(item)
+      clusterEnd = max(clusterEnd, item.end)
+    }
+    appendCluster(cluster)
+    return result
   }
 
   static func recordingProjectionWindow(
