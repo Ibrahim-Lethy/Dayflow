@@ -32,7 +32,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		C4C1D2A12DB56805007D5A55 /* Dayflow.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Dayflow.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C4C1D2A12DB56805007D5A55 /* Dayflow Local.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Dayflow Local.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		C4C1D2B22DB56806007D5A55 /* DayflowTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DayflowTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C4C1D2BC2DB56806007D5A55 /* DayflowUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DayflowUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C4DF00012EFB100000000001 /* Config/Dayflow.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Dayflow.xcconfig; sourceTree = "<group>"; };
@@ -94,7 +94,7 @@
 		C4C1D2A22DB56805007D5A55 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				C4C1D2A12DB56805007D5A55 /* Dayflow.app */,
+				C4C1D2A12DB56805007D5A55 /* Dayflow Local.app */,
 				C4C1D2B22DB56806007D5A55 /* DayflowTests.xctest */,
 				C4C1D2BC2DB56806007D5A55 /* DayflowUITests.xctest */,
 			);
@@ -129,7 +129,7 @@
 				C4AD00022F0D00010000000B /* MarkdownUI */,
 			);
 			productName = Dayflow;
-			productReference = C4C1D2A12DB56805007D5A55 /* Dayflow.app */;
+			productReference = C4C1D2A12DB56805007D5A55 /* Dayflow Local.app */;
 			productType = "com.apple.product-type.application";
 		};
 		C4C1D2B12DB56806007D5A55 /* DayflowTests */ = {
@@ -442,11 +442,11 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 120;
 				DEVELOPMENT_ASSET_PATHS = "\"Dayflow/Preview Content\"";
-				DEVELOPMENT_TEAM = "";
-				EXECUTABLE_NAME = Dayflow;
+				DEVELOPMENT_TEAM = 3DC6LX57JN;
 				ENABLE_HARDENED_RUNTIME = NO;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				EXECUTABLE_NAME = Dayflow;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Dayflow/Info.plist;
 				INFOPLIST_KEY_LSUIElement = NO;
@@ -480,11 +480,11 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 120;
 				DEVELOPMENT_ASSET_PATHS = "\"Dayflow/Preview Content\"";
-				DEVELOPMENT_TEAM = "";
-				EXECUTABLE_NAME = Dayflow;
+				DEVELOPMENT_TEAM = 3DC6LX57JN;
 				ENABLE_HARDENED_RUNTIME = NO;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				EXECUTABLE_NAME = Dayflow;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Dayflow/Info.plist;
 				INFOPLIST_KEY_LSUIElement = NO;
